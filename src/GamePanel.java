@@ -9,6 +9,7 @@ public class GamePanel extends JPanel implements Runnable {
     int screenWidth = tileSize * (size + 2);
     int screenHeight = tileSize * (size + 2);
 
+    /**Grid of tiles*/
     static Tile[][] grid;
     Thread gameThread;
 
@@ -17,21 +18,21 @@ public class GamePanel extends JPanel implements Runnable {
         this.setBackground(Color.WHITE);
         this.setDoubleBuffered(true);
 
-        // Initialize the grid of tiles
-        grid = new Tile[size + 2][size + 2];
+        // Initializes the grid of tiles
+        grid = new Tile[size + 2][size + 2]; // Add 2 to each dimension for the border
         for (int i = 0; i < size + 2; i++) {
             for (int j = 0; j < size + 2; j++) {
                 if (i == 0 || i == size + 1 || j == 0 || j == size + 1) {
-                    Tile wallTile = new Tile(0, 0, 0.5);
+                    Tile wallTile = new Tile(0, 0, 0);
                     wallTile.wall = true;
                     grid[i][j] = wallTile;
                     continue;
                 }
                 if ((i == 25 && j == 25) || (i == 26 && j == 25) || (i == 25 && j == 26) || (i == 26 && j == 26)) {
-                    Tile t = new Tile(10, 10, 0.1);
+                    Tile t = new Tile(8, 8, 0.9);
                     t.prevVX = 10;
                     t.prevVY = 10;
-                    t.prevdensity = 0;
+                    t.prevdensity = 0.9;
                     grid[i][j] = t;
                     continue;
                 }
@@ -57,7 +58,7 @@ public class GamePanel extends JPanel implements Runnable {
     private void handleMouseInput(MouseEvent e) {
         int x = e.getX() / tileSize;
         int y = e.getY() / tileSize;
-        grid[x][y].density = 1;
+        grid[x][y].density = 0.8;
 
     }
 
@@ -82,8 +83,8 @@ public class GamePanel extends JPanel implements Runnable {
                 updateVelocities(delta);
                 advectVY(delta);
                 advectVX(delta);
-                advectDensities(delta);
                 diffuse(delta);
+                advectDensities(delta);
                 stabilize(delta);
                 repaint();
                 delta = 0;
@@ -107,9 +108,6 @@ public class GamePanel extends JPanel implements Runnable {
                 if (tile.wall) {
                     g2.setColor(Color.getHSBColor(0, 0, 0));
                 }
-                if (tile.marked) {
-                    g2.setColor(Color.getHSBColor(0, 1, 1));
-                }
                 g2.fillRect(i * tileSize, j * tileSize, tileSize, tileSize);
 
                 // Draw border around each tile
@@ -123,8 +121,10 @@ public class GamePanel extends JPanel implements Runnable {
         for (int i = 1; i < size + 1; i++) {
             for (int j = 1; j < size + 1; j++) {
                 Tile tile = grid[i][j];
+                //Cell center coordinates
                 int x1 = i * tileSize + tileSize / 2;
                 int y1 = j * tileSize + tileSize / 2;
+                //Arrow end coordinates
                 int x2 = (int) (x1 + tile.VX * tileSize);
                 int y2 = (int) (y1 + tile.VY * tileSize);
                 drawArrow(g2, x1, y1, x2, y2);
@@ -215,17 +215,16 @@ public class GamePanel extends JPanel implements Runnable {
                     grid[i][j].VY = 0;
                     continue;
                 }
-                if ((i == 25 && j == 25) || (i == 26 && j == 25) || (i == 25 && j == 26) || (i == 26 && j == 26)) {
-                    grid[i][j].VX += 0.0001 * delta;
-                    grid[i][j].density = 0.8;
-                    grid[i][j].VY += 0.0001 * delta;
+                if ((i == 1 && j == 25) || (i == 2 && j == 25) || (i == 1 && j == 26) || (i == 2 && j == 26)) {
+                    grid[i][j].VX += 0.2 * delta;
+                    grid[i][j].VY += 0.8 * delta;
                 }
             }
         }
     }
 
     public void stabilize(double delta) {
-        double overrelax = 1; // Between 1 and 2
+        double overrelax = 1.5; // Between 1 and 2
         int iterations = 600; // Number of iterations for pressure projection
 
         for (int k = 0; k < iterations; k++) {
@@ -256,12 +255,14 @@ public class GamePanel extends JPanel implements Runnable {
                     grid[i + 1][j].VX -= changeDiv;
                     grid[i][j + 1].VY -= changeDiv;
 
-                    //Bounce of walls
+                    //Reflect of walls
                     if (grid[i - 1][j].wall && grid[i][j].VX < 0) {
-                        grid[i][j].VX = Math.abs(grid[i][j].VX);
+                        grid[i][j].VX = -(grid[i][j].VX);
+                        grid[i-1][j].VX = -(grid[i][j].VX);
                     }
-                    if (grid[i][j - 1].wall && grid[i][j - 1].VY < 0) {
-                        grid[i][j - 1].VY = Math.abs(grid[i][j - 1].VY);
+                    if (grid[i][j - 1].wall && grid[i][j].VY < 0) {
+                        grid[i][j - 1].VY = -(grid[i][j - 1].VY);
+                        grid[i][j].VY = -(grid[i][j - 1].VY);
                     }
                     if (grid[i + 1][j].wall && grid[i + 1][j].VX > 0) {
                         grid[i + 1][j].VX = -grid[i + 1][j].VX;
@@ -277,14 +278,16 @@ public class GamePanel extends JPanel implements Runnable {
     }
 
     public void diffuse(double delta) {
-        double diffusion = delta * 0.00001;
+        // Diffusion coefficient
+        double diffusion = delta * 0.0000000000001;
         for (int i = 1; i < grid.length - 1; i++) {
             for (int j = 1; j < grid[0].length - 1; j++) {
-                //DIFFUSION
+                // Walls have no density
                 if (grid[i][j].wall) {
-                    grid[i][j].density = 0; // Walls have no density
+                    grid[i][j].density = 0;
                     continue;
                 }
+                // Calculate average density of neighbors
                 int neighbors = 0;
                 double neighborSum = 0;
                 if (!grid[i - 1][j].wall) {
@@ -303,10 +306,12 @@ public class GamePanel extends JPanel implements Runnable {
                     neighbors++;
                     neighborSum += grid[i][j + 1].prevdensity;
                 }
-                grid[i][j].density += (neighborSum - (neighbors * grid[i][j].density)) * (neighborSum - (neighbors * grid[i][j].density)) * diffusion;
+                // Update density
+                grid[i][j].density += (neighborSum - (neighbors * grid[i][j].density)) * diffusion;
 
             }
         }
+        // Update previous densities
         for (Tile[] row : grid) {
             for (Tile t : row) {
                 t.prevdensity = t.density;
@@ -316,10 +321,10 @@ public class GamePanel extends JPanel implements Runnable {
 
     // Helper method to draw an arrow
     private void drawArrow(Graphics2D g2, int x1, int y1, int x2, int y2) {
+        //Dieses 6 Zeilen sind von Stack Overflow, ich konnte aber bei erneuter recherche nicht den Beitrag finden
         int arrowSize = 5;
         int dx = x2 - x1, dy = y2 - y1;
         double angle = Math.atan2(dy, dx);
-
         g2.drawLine(x1, y1, x2, y2);
         g2.drawLine(x2, y2, x2 - (int) (arrowSize * Math.cos(angle - Math.PI / 6)), y2 - (int) (arrowSize * Math.sin(angle - Math.PI / 6)));
         g2.drawLine(x2, y2, x2 - (int) (arrowSize * Math.cos(angle + Math.PI / 6)), y2 - (int) (arrowSize * Math.sin(angle + Math.PI / 6)));
